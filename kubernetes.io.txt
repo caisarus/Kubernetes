@@ -95,3 +95,148 @@ kubectl get pods -l app=v1
 
 
 
+SCALING
+To list your deployments use the get deployments command: kubectl get deployments
+
+We should have 1 Pod. If not, run the command again. This shows:
+
+The DESIRED state is showing the configured number of replicas
+
+The CURRENT state show how many replicas are running now
+
+The UP-TO-DATE is the number of replicas that were updated to match the desired (configured) state
+
+The AVAILABLE state shows how many replicas are actually AVAILABLE to the users
+
+Next, let’s scale the Deployment to 4 replicas. We’ll use the kubectl scale command, followed by the deployment type, name and desired number of instances:
+
+kubectl scale deployments/kubernetes-bootcamp --replicas=4
+
+To list your Deployments once again, use get deployments:
+
+kubectl get deployments
+
+The change was applied, and we have 4 instances of the application available. Next, let’s check if the number of Pods changed:
+
+kubectl get pods -o wide
+
+There are 4 Pods now, with different IP addresses. The change was registered in the Deployment events log. To check that, use the describe command:
+
+kubectl describe deployments/kubernetes-bootcamp
+
+
+
+
+
+
+LOAD BALANCING
+Let’s check that the Service is load-balancing the traffic. To find out the exposed IP and Port we can use the describe service as we learned in the previously Module:
+
+kubectl describe services/kubernetes-bootcamp
+
+Create an environment variable called NODE_PORT that has as value the Node port:
+
+export NODE_PORT=$(kubectl get services/kubernetes-bootcamp -o go-template='{{(index .spec.ports 0).nodePort}}')
+echo NODE_PORT=$NODE_PORT
+
+Next, we’ll do a curl to the the exposed IP and port. Execute the command multiple times:
+
+curl host01:$NODE_PORT
+
+
+
+
+UPDATING
+To view the current image version of the app, run a describe command against the Pods (look at the Image field):
+
+kubectl describe pods
+
+To update the image of the application to version 2, use the set image command, followed by the deployment name and the new image version:
+
+kubectl set image deployments/kubernetes-bootcamp kubernetes-bootcamp=jocatalin/kubernetes-bootcamp:v2
+verify
+First, let’s check that the App is running. To find out the exposed IP and Port we can use describe service:
+
+kubectl describe services/kubernetes-bootcamp
+
+Create an environment variable called NODE_PORT that has as value the Node port:
+
+export NODE_PORT=$(kubectl get services/kubernetes-bootcamp -o go-template='{{(index .spec.ports 0).nodePort}}')
+echo NODE_PORT=$NODE_PORT
+
+Next, we’ll do a curl to the the exposed IP and port:
+
+curl host01:$NODE_PORT
+
+We hit a different Pod with every request and we see that all Pods are running the latest version (v2).
+
+The update can be confirmed also by running a rollout status command:
+
+kubectl rollout status deployments/kubernetes-bootcamp
+
+To view the current image version of the app, run a describe command against the Pods:
+
+kubectl describe pods
+ROLLBACK
+Let’s perform another update, and deploy image tagged as v10 :
+
+kubectl set image deployments/kubernetes-bootcamp kubernetes-bootcamp=jocatalin/kubernetes-bootcamp:v10
+
+Use get deployments to see the status of the deployment:
+
+kubectl get deployments
+
+And something is wrong… We do not have the desired number of Pods available. List the Pods again:
+
+kubectl get pods
+
+A describe command on the Pods should give more insights:
+
+kubectl describe pods
+
+There is no image called v10 in the repository. Let’s roll back to our previously working version. We’ll use the rollout undo command:
+
+kubectl rollout undo deployments/kubernetes-bootcamp
+
+The rollout command reverted the deployment to the previous known state (v2 of the image). Updates are versioned and you can revert to any previously know state of a Deployment. List again the Pods:
+
+kubectl get pods
+
+Four Pods are running. Check again the image deployed on the them:
+
+kubectl describe pods
+
+
+
+
+
+
+MULTIPLE CONTAINERS WITH VOLUMES
+apiVersion: v1
+kind: Pod
+metadata:
+  name: www
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    volumeMounts:
+    - mountPath: /srv/www
+      name: www-data
+      readOnly: true
+  - name: git-monitor
+    image: kubernetes/git-monitor
+    env:
+    - name: GIT_REPO
+      value: http://github.com/some/repo.git
+    volumeMounts:
+    - mountPath: /data
+      name: www-data
+  volumes:
+  - name: www-data
+    emptyDir: {}
+
+
+
+
+
