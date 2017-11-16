@@ -1,0 +1,300 @@
+install ntpd
+add hostnames in /etc/hosts
+add nameserver in /etc/resolv.conf
+sudo vi /etc/yum.repos.d/virt7-docker-common-release.repo 
+	[virt7-docker-common-release]
+	name=virt7-docker-common-release
+	baseurl=http://cbs.centos.org/repos/virt7-docker-common-release/x86_64/os/
+	gpgcheck=0
+disable firewall
+install etcd
+yum install -y --enablerepo=virt7-docker-common-release kubernetes docker on everything
+
+
+
+ON MASTER
+cd /etc/kubernetes/
+vi config
+change and add KUBE_MASTER="--master=http://controller:8080"
+
+KUBE_ETCD_SERVERS="--etcd-servers=http://controller:2379"
+
+cd /etc/etcd
+vi conf
+change to ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379"
+and for cluster the same
+ cd /etc/kubernetes/
+vi apiserver
+KUBE_API_ADDRESS="--address=0.0.0.0"
+
+# The port on the local server to listen on.
+KUBE_API_PORT="--port=8080"
+
+# Port minions listen on
+KUBELET_PORT="--kubelet-port=10250"
+#comment admission control
+systemctl enable etcd kube-apiserver kube-controller-manager kube-scheduler
+systemctl status etcd kube-apiserver kube-controller-manager kube-scheduler
+systemctl start etcd kube-apiserver kube-controller-manager kube-scheduler
+systemctl status etcd kube-apiserver kube-controller-manager kube-scheduler | grep "(running)" | wc -l
+
+
+
+
+
+ON MINIONS:
+vi /etc/kubernetes/config
+
+KUBE_MASTER="--master=http://controller:8080"
+KUBE_ETCD_SERVERS="--etcd-servers=http://controller:2379"
+
+
+
+vi /etc/kubernetes/kubelet
+KUBELET_ADDRESS="--address=0.0.0.0"
+
+# The port for the info server to serve on
+KUBELET_PORT="--port=10250"
+
+# You may leave this blank to use the actual hostname
+KUBELET_HOSTNAME="--hostname-override=mini1"
+
+# location of the api-server
+KUBELET_API_SERVER="--api-servers=http://controller:8080"
+
+# pod infrastructure container
+#KUBELET_POD_INFRA_CONTAINER="--pod-infra-container-image=registry.access.redhat.com/rhel7/pod-infrastructure:latest"
+
+systemctl enable kube-proxy kubelet docker
+systemctl start kube-proxy kubelet docker
+systemctl status kube-proxy kubelet docker | grep "(running)" | wc -l
+
+
+
+TO CREATEA A NEW POD CREATE YAML FILE
+ALL FROM MASTER
+[root@controller ~]# cat nginx.yml
+apiVersion: v1
+kind: Pod
+metadata:
+   name: nginx
+spec:
+   containers:
+   - name: nginx
+     image: nginx:1.7.9
+     ports:
+     - containerPort: 80
+
+create pod with 
+kubectl create -f ./nginx.yml
+ kubectl describe pod nginx
+
+  77  kubectl run busybox --image=busybox --restart=Never --tty -i --generator=run-pod/v1
+   78  kubectl get pods
+   79  kubectl delete pod busybox
+ kubectl create -f nginx.yml
+   88  kubectl port-forward nginx :80 &
+   93  wget -qO- http://localhost:43723
+   
+  kubectl get pods -l app=nginx
+  modified in yaml file "metadata:
+   name: nginx
+   labels:
+     app: nginx
+"
+
+Deployment production yaml example
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+   name: nginx-deployment-prod
+spec:
+   replicas: 1
+   template:
+     metadata:
+       labels:
+         app: nginx-deployment-prod
+     spec:
+       containers:
+       - name: nginx-deployment-prod
+         image: nginx:1.7.9
+         ports:
+         - containerPort: 80
+
+120  cp nginx-deployment-prod.yml nginx-deployment-dev.yml
+  121  vi nginx-deployment-dev.yml
+  122  sed -i 's/prod/dev/g' nginx-deployment-dev.yml
+  123  cat nginx-deployment-dev.yml
+  124  kubectl create -f nginx-deployment-dev.yml
+  125  kubectl get deploymen
+  126  kubectl get deployments
+  127  kubectl get pods
+  128  kubectl describe deploymends
+  129  kubectl describe deployments -l app=nginx-deployment-dev
+
+ To update existing deployments modify the current version (to nginx 1.8)
+ [root@controller Builds]# cp nginx-deployment-dev.yml nginx-deployment-dev-update.yml
+[root@controller Builds]# vim nginx-deployment-dev-update.yml
+[root@controller Builds]# kubectl apply -f nginx-deployment-dev-update.yml
+deployment "nginx-deployment-dev" configured
+
+
+delploy replication pod
+[root@controller Builds]# vim nginx-multi-label.yml
+apiVersion: v1
+kind: ReplicationController
+metadata:
+   name: nginx-www
+spec:
+   replicas: 3
+   selector:
+     app: nginx
+   template:
+     metadata:
+       name: nginx
+       labels:
+         app: nginx
+     spec:
+       containers:
+       - name: nginx
+         image: nginx
+         ports:
+         - containerPort: 80
+
+kubectl get replicationcontrollers
+kubectl delete replicationcontroller nginx-www
+
+SERVICES
+
+
+[root@kubernetes-master builds]# cat nginx-service.yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  ports:
+  - port: 8000
+    targetPort: 80
+    protocol: TCP
+  selector:
+    app: nginx
+
+kubectl describe service nginx-service
+take the cluster IPV
+kubectl run busybox --generator=run-pod/v1 --image=busybox --restart=Never --tty -i
+from busybox wget on the cluster ip
+
+RUN TEMPORARY PODS AT THE COMMAND LINE
+
+# .bashrc
+
+# User specific aliases and functions
+
+alias rm='rm -i'
+alias cp='cp -i'
+alias mv='mv -i'
+alias k='kubectl'
+alias kp='kubectl get pods'
+alias kd='kubectl get deployments'
+alias krc='kubectl get replicationcontrollers'
+
+# Source global definitions
+if [ -f /etc/bashrc ]; then
+        . /etc/bashrc
+fi
+
+
+kubectl run mysample --image=latest123/apache
+Run 2 replicas with labels (can add --port)
+kubectl run myreplicas --image=latest123/apache --replicas=2 --labels=app=myapache,version=1.0
+
+
+INTERACTING WITH PODS
+[root@kubernetes-master builds]# cat myapache.yml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapache
+spec:
+  containers:
+  - name: myapache
+    image: latest123/apache
+    ports:
+      containerPort: 80
+
+[root@kubernetes-master builds]# k exec myapache date
+Sat Jul 29 20:52:49 UTC 2017
+
+#Use this to connect to the container ID inside the myapache POD
+[root@kubernetes-master builds]# k exec myapache -c CONTAINERID date
+
+[root@kubernetes-master builds]# k exec myapache -i -t -- /bin/bash
+root@myapache:/# ls
+
+#To have the bash configured properly in DEBIAN
+export TERM=xterm
+
+LOGS
+[root@kubernetes-master builds]# k logs myapache
+
+[root@kubernetes-master builds]# k logs --tail=1 myapache
+
+[root@kubernetes-master builds]# k logs --since=24h myapache
+
+k logs -f myapache
+
+k logs -f -c CONTAINERID myapache
+
+AUTOSCALING AND SCALING OUR PODS
+[root@kubernetes-master builds]# k run myautoscale --image=latest123/apache --port=80 --labels=app=myautoscale
+
+[root@kubernetes-master builds]# k autoscale deployment myautoscale --min=3 --max=9
+deployment "myautoscale" autoscaled
+
+[root@kubernetes-master builds]# k scale --current-replicas=3 --replicas=9 deployment/myautoscale
+deployment "myautoscale" scaled
+
+cannot scale to below the minimum that we set first
+
+FAILURE and RECOVERY
+Need to use a service to load balance the pods and if one is not running then the LB will not send requests to it
+The pod will recover once the minion is back up
+
+
+
+KBERNETES UDEMY
+
+kubectl run hello-minikube --image=gcr.io/google_containers/echoserver:1.4 --port=8080
+k expose deployment hello-minikube --type=NodePort
+kubectl get services
+k port-forward nodehelloworld.example.com 8081:3000
+k expose pod nodehelloworld.example.com --type=NodePort --name nodewelloworld-service
+
+#Scaling pods
+Example yml file:
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: helloworld-controller
+spec:
+  replicas: 2
+  selector:
+    app: helloworld
+  template:
+    metadata:
+      labels:
+        app: helloworld
+    spec:
+      containers:
+      - name: k8s-demo
+        image: wardviaene/k8s-demo
+        ports:
+        - name: nodejs-port
+          containerPort: 3000
+k create -f helloworld-repl-controller.yml
+k scale --replicas=4 -f helloworld-repl-controller.yml
+k scale --replicas=3 rc/helloworld-controller
+
+kubectl delete pods --all
+
