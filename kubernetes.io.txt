@@ -240,3 +240,73 @@ spec:
 
 
 
+LABELS
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    ports:
+    - containerPort: 80
+
+kubectl create -f docs/user-guide/walkthrough/pod-nginx-with-label.yaml
+
+kubectl get pods -l app=nginx
+
+
+
+
+DEPLOYMENTS
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: 2 # tells deployment to run 2 pods matching the template
+  template: # create pods using pod definition in this template
+    metadata:
+      # unlike pod-nginx.yaml, the name is not included in the meta data as a unique name is
+      # generated from the deployment name
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.7.9
+        ports:
+        - containerPort: 80
+
+
+kubectl create -f ./deployment.yaml
+List all Deployments:
+kubectl get deployment
+List the Pods created by the Deployment:
+kubectl get pods -l app=nginx
+
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.8 # Update the version of nginx from 1.7.9 to 1.8
+        ports:
+        - containerPort: 80
+
+kubectl apply -f ./deployment-update.yaml
+Watch the Deployment create Pods with new names and delete the old Pods:
+kubectl get pods -l app=nginx
+Delete the Deployment by name:
+kubectl delete deployment nginx-deployment
